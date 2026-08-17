@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COD: OPS — 第一人称射击</title>
+<style>
+  :root{
+    --hud:#cfe3b8;
+    --accent:#ffb347;
+    --spread:12px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:"Segoe UI","Microsoft YaHei",sans-serif;cursor:default}
+  canvas{display:block}
+  #app{position:fixed;inset:0}
+
+  /* ---------- overlay screens ---------- */
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;color:#e8e8e8;text-align:center}
+  .screen .panel{background:rgba(8,12,10,.82);border:1px solid rgba(160,190,140,.35);padding:42px 56px;max-width:820px;box-shadow:0 0 60px rgba(0,0,0,.7)}
+  .screen h1{font-size:58px;letter-spacing:6px;font-weight:900;color:#dce8c8;text-shadow:0 0 18px rgba(150,200,120,.35)}
+  .screen h1 small{display:block;font-size:20px;letter-spacing:12px;color:#9fb383;margin-top:6px}
+  .screen h2{font-size:34px;letter-spacing:4px;color:#ffd28f;margin-bottom:14px;text-shadow:0 0 14px rgba(255,150,60,.35)}
+  .screen p{font-size:15px;line-height:1.9;color:#c6cbbf}
+  .btn{margin-top:26px;display:inline-block;padding:14px 46px;font-size:20px;letter-spacing:4px;color:#0d1309;background:linear-gradient(180deg,#ffcf7d,#e09a3d);border:1px solid #ffe0a8;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.5);transition:transform .08s}
+  .btn:hover{transform:scale(1.04)}
+  .controls{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:6px 34px;margin:20px 0 4px;text-align:left}
+  .controls div{display:flex;justify-content:space-between;gap:14px;font-size:14px;color:#b9c2b0}
+  .controls b{color:#ffd28f;font-weight:700}
+  .blink{animation:blink 1.4s infinite}
+  @keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.25}}
+  #ui-death .statline{font-size:17px;color:#ffcf8a;margin-top:8px}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none}
+  .vignette{position:absolute;inset:0;box-shadow:inset 0 0 180px 40px rgba(0,0,0,.65)}
+  #dmg{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 34%,rgba(190,20,10,.55) 100%);opacity:0;transition:opacity .12s}
+  #lowhp{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 42%,rgba(160,10,5,.55) 100%);opacity:0;animation:lowpulse 1s infinite}
+  @keyframes lowpulse{0%,100%{opacity:0}50%{opacity:.65}}
+  .bar-wrap{position:absolute;left:26px;bottom:24px;width:260px}
+  #healthBar{height:16px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);transform:skewX(-12deg)}
+  #healthFill{height:100%;width:100%;background:linear-gradient(180deg,#ff6a5e,#c92f1d);transition:width .12s}
+  #healthText{margin-top:5px;font-size:14px;color:var(--hud);text-shadow:0 1px 3px #000}
+  #staminaWrap{position:absolute;left:26px;bottom:64px;width:180px}
+  #staminaBar{height:6px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2)}
+  #staminaFill{height:100%;width:100%;background:#8fd3ff;transition:width .1s}
+
+  #ammoBox{position:absolute;right:34px;bottom:22px;text-align:right;color:#fff;text-shadow:0 2px 4px #000}
+  #ammoMag{font-size:54px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums}
+  #ammoReserve{font-size:22px;color:#cbd6be}
+  #weaponName{margin-top:2px;font-size:13px;letter-spacing:3px;color:#9fb383}
+  #grenadeBox{position:absolute;right:34px;bottom:128px;text-align:right;color:#d8e8c0;text-shadow:0 1px 3px #000;font-size:18px}
+  #prompt{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);font-size:15px;letter-spacing:2px;color:#ffd28f;text-shadow:0 1px 4px #000;display:none}
+
+  #topBar{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:26px;font-size:15px;letter-spacing:2px;color:var(--hud);text-shadow:0 1px 3px #000;background:rgba(0,0,0,.28);padding:7px 22px;border:1px solid rgba(255,255,255,.12)}
+  #topBar b{color:#fff}
+  #waveTag{position:absolute;top:64px;left:50%;transform:translateX(-50%);font-size:20px;letter-spacing:6px;color:#ffcf8a;text-shadow:0 1px 4px #000;display:none;transition:opacity .5s}
+
+  /* crosshair */
+  #crosshair{position:absolute;left:50%;top:50%;width:0;height:0}
+  #crosshair span{position:absolute;background:rgba(220,255,200,.95);box-shadow:0 0 2px #000}
+  #crosshair .t{left:-1px;top:calc(-1px - var(--spread));width:2px;height:9px}
+  #crosshair .b{left:-1px;top:var(--spread);width:2px;height:9px}
+  #crosshair .l{top:-1px;left:calc(-1px - var(--spread));height:2px;width:9px}
+  #crosshair .r{top:-1px;left:var(--spread);height:2px;width:9px}
+  #crosshair .dot{left:-2px;top:-2px;width:4px;height:4px;border-radius:50%}
+
+  /* hitmarker */
+  #hitmarker{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0}
+  #hitmarker span{position:absolute;width:2px;height:9px;background:#fff;box-shadow:0 0 3px #000}
+  #hitmarker .d1{transform:translate(-7px,-12px) rotate(-45deg)}
+  #hitmarker .d2{transform:translate(6px,-12px) rotate(45deg)}
+  #hitmarker .d3{transform:translate(-7px,5px) rotate(45deg)}
+  #hitmarker .d4{transform:translate(6px,5px) rotate(-45deg)}
+  #hitmarker.head span{background:#ffd23e}
+  #hitmarker.kill span{background:#ff5a3c;width:3px;height:12px}
+
+  /* scope */
+  #scope{position:absolute;inset:0;display:none;background:radial-gradient(circle at center,transparent 19%,rgba(0,0,0,.985) 34%)}
+  #scope::before{content:"";position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(0,0,0,.9)}
+  #scope::after{content:"";position:absolute;top:50%;left:0;height:1px;width:100%;background:rgba(0,0,0,.9)}
+  #scope .ring{position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;background:#000;transform:translate(-1px,-1px)}
+
+  /* radar */
+  #radarWrap{position:absolute;top:14px;right:20px;width:168px;height:168px;background:rgba(6,12,8,.55);border:1px solid rgba(160,200,130,.4);border-radius:6px;overflow:hidden}
+  #radar{width:168px;height:168px}
+
+  /* killfeed */
+  #killfeed{position:absolute;top:14px;left:18px;width:280px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+  .kf{background:rgba(0,0,0,.45);border-left:3px solid #ffb347;color:#e8e8e0;font-size:13px;padding:4px 10px;animation:kfin .18s ease-out;transition:opacity 1s}
+  @keyframes kfin{from{transform:translateX(-20px);opacity:0}to{transform:none;opacity:1}}
+
+  #toast{position:absolute;top:26%;left:50%;transform:translateX(-50%);font-size:30px;font-weight:800;letter-spacing:8px;color:#ffcf8a;text-shadow:0 0 16px rgba(255,120,30,.6),0 2px 4px #000;opacity:0;transition:opacity .3s;white-space:nowrap}
+  #toast.show{opacity:1}
+
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#fff;font-size:18px;z-index:99;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- START SCREEN -->
+<div id="ui-menu" class="screen">
+  <div class="panel">
+    <h1>COD: OPS<small>特种行动 · HTML5 FPS</small></h1>
+    <p>第一人称射击 · 波次生存 · 敌军 AI · 小地图雷达 · 连杀奖励提示</p>
+    <div class="controls">
+      <div><span><b>W A S D</b> 移动</span><span><b>鼠标</b> 视角</span></div>
+      <div><span><b>左键</b> 射击</span><span><b>右键</b> 开镜瞄准</span></div>
+      <div><span><b>Shift</b> 冲刺</span><span><b>C</b> 蹲下 / <b>空格</b> 跳跃</span></div>
+      <div><span><b>R</b> 换弹</span><span><b>1-4 / 滚轮</b> 切换武器</span></div>
+      <div><span><b>G</b> 投掷破片手雷</span><span><b>M</b> 静音 / <b>Esc</b> 暂停</span></div>
+    </div>
+    <div class="btn blink" id="btnStart">点击开始任务</div>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div id="ui-pause" class="screen" style="display:none">
+  <div class="panel">
+    <h2>已暂停</h2>
+    <p>鼠标已释放。准备好后点击下方按钮重新锁定鼠标继续战斗。</p>
+    <div class="btn" id="btnResume">继续战斗</div>
+  </div>
+</div>
+
+<!-- DEATH -->
+<div id="ui-death" class="screen" style="display:none">
+  <div class="panel">
+    <h2>你阵亡了</h2>
+    <p id="deathStats" class="statline"></p>
+    <p style="margin-top:12px">敌军仍在推进，重新部署继续完成任务。</p>
+    <div class="btn" id="btnRespawn">重新部署 (R)</div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="vignette"></div>
+  <div id="dmg"></div>
+  <div id="lowhp" style="display:none"></div>
+  <div id="scope"><div class="ring"></div></div>
+
+  <div id="topBar">
+    <span>得分 <b id="scoreVal">0</b></span>
+    <span>波次 <b id="waveVal">0</b></span>
+    <span>击杀 <b id="killVal">0</b></span>
+  </div>
+  <div id="waveTag"></div>
+
+  <div id="killfeed"></div>
+  <div id="radarWrap"><canvas id="radar" width="168" height="168"></canvas></div>
+
+  <div id="crosshair"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span><span class="dot"></span></div>
+  <div id="hitmarker"><span class="d1"></span><span class="d2"></span><span class="d3"></span><span class="d4"></span></div>
+  <div id="toast"></div>
+
+  <div class="bar-wrap">
+    <div id="healthBar"><div id="healthFill"></div></div>
+    <div id="healthText">生命 100</div>
+  </div>
+  <div id="staminaWrap"><div id="staminaBar"><div id="staminaFill"></div></div></div>
+
+  <div id="grenadeBox">手雷 (G) × <b id="grenadeCount">3</b></div>
+  <div id="ammoBox">
+    <div><span id="ammoMag">30</span> <span style="font-size:20px">/</span> <span id="ammoReserve">120</span></div>
+    <div id="weaponName">M4A1 突击步枪</div>
+  </div>
+  <div id="prompt"></div>
+</div>
+
+<div id="err">无法初始化 WebGL，请使用支持 WebGL 的现代浏览器打开本文件。</div>
+
+<script>/*__THREE__*/</script>
+<script>/*__GAME__*/</script>
+</body>
+</html>
